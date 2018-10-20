@@ -53,3 +53,5 @@ pip install pwntools
 Individual challenge walkthroughs are in their respective folders. They go easiest to hardest. Obviously, there are SPOILERS in these :)
 
 * [ret2win](ret2win/README.md)
+* [split](split/README.md)
+* [callme](callme/README.md)
