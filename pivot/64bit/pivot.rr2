@@ -1,0 +1,10 @@
+#!/usr/bin/rarun2
+# stdio=/dev/pts/14
+# stdin=/dev/pts/14
+# stdout=/dev/pts/14
+connect=127.0.0.1:9999
+# stdin=./payload
+# arg0="./pivot"
+# arg1="UNUSED"
+setenv=LD_BIND_NOW=1
+preload=libpivot.so
