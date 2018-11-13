@@ -58,3 +58,4 @@ Individual challenge walkthroughs are in their respective folders. They go easie
 * [write4](write4/README.md)
 * [badchars](badchars/README.md)
 * [fluff](fluff/README.md)
+* [pivot](pivot/README.md)
